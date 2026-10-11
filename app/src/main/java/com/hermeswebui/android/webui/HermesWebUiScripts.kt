@@ -1409,9 +1409,9 @@ object HermesWebUiScripts {
     }
 
     /**
-     * Host side of WebUI's voice contract: `hermes-app-foreground` with `active:false` makes
-     * WebUI stop every microphone track and cancel playback; `active:true` only permits a new
-     * explicit arm. The flag is also set directly so a document still booting sees it.
+     * Proposed host signal, not a capture/playback implementation. Current WebUI does not
+     * consume it; a future consumer must stop existing capture/playback on foreground loss and
+     * require explicit re-arm. The flag also exposes state to a document still booting.
      */
     fun buildAppForegroundScript(active: Boolean): String {
         return """
@@ -1425,4 +1425,3 @@ object HermesWebUiScripts {
         """.trimIndent()
     }
 }
-

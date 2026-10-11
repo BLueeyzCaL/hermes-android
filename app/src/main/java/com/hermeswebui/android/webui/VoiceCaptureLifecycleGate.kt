@@ -1,12 +1,13 @@
 package com.hermeswebui.android.webui
 
 /**
- * Android half of the Hermes WebUI voice conversation contract (`hermes-app-foreground`).
+ * Android permission gate and proposed `hermes-app-foreground` host signal.
  *
  * WebUI owns capture, wake, STT, TTS and every profile/session/generation check. Android only
- * grants WebView microphone access while the activity is resumed and tells WebUI the moment
- * it loses the foreground, so WebUI stops every track. Returning reports foreground state but
- * never re-arms: listening stays off until the user arms it in WebUI again.
+ * denies new WebView microphone requests while the activity is not resumed. A trusted pending
+ * RECORD_AUDIO result may be granted while started, just before onResume. Android reports
+ * foreground state but does not stop already-granted tracks or playback. Current WebUI does not
+ * consume this signal; stopping existing capture/playback and explicit re-arm require a consumer.
  *
  * Generic over the WebView permission request so the lifecycle rules are JVM-testable.
  */

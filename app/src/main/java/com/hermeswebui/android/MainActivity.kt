@@ -120,6 +120,7 @@ import com.hermeswebui.android.ui.settings.VpnLaunchAppOption
 import com.hermeswebui.android.ui.web.WebShell
 import com.hermeswebui.android.webui.HermesWebUiScripts
 import com.hermeswebui.android.webui.VoiceCaptureLifecycleGate
+import com.hermeswebui.android.webview.HermesMediaPlaybackPolicy
 import com.hermeswebui.android.webview.HermesWebViewConfigurator
 import com.hermeswebui.android.webview.HermesWebViewDownloadListener
 import com.hermeswebui.android.update.HermesAppUpdateCoordinator
@@ -266,8 +267,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-    // WebUI owns voice capture; Android grants the WebView microphone only while resumed and
-    // reports foreground loss through WebUI's hermes-app-foreground contract.
+    // WebUI owns existing capture/playback. This proposed host signal requires a WebUI consumer.
     private val voiceCaptureGate: VoiceCaptureLifecycleGate<PermissionRequest> = VoiceCaptureLifecycleGate(
         grantAudioCapture = { it.grant(arrayOf(PermissionRequest.RESOURCE_AUDIO_CAPTURE)) },
         denyAudioCapture = { it.deny() },
@@ -387,7 +387,8 @@ class MainActivity : ComponentActivity() {
             viewModel = viewModel,
             serverUrlValidator = serverUrlValidator,
             onOpenInExternalBrowser = ::openInExternalBrowser,
-            onPerformServerProfileSwitch = ::performServerProfileSwitch
+            onPerformServerProfileSwitch = ::performServerProfileSwitch,
+            onRefreshConfiguredHermes = ::loadServerUrlWithVpnGuard
         )
         foregroundServiceCoordinator = HermesForegroundServiceCoordinator(
             context = this,
@@ -481,7 +482,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onPause() {
-        // First so WebUI drops microphone tracks before any other pause work.
+        // Report host state first; stopping existing tracks requires WebUI support.
         voiceCaptureGate.onPause()
         if (::webView.isInitialized) {
             viewModel.onAppBackgrounded()
@@ -901,7 +902,11 @@ class MainActivity : ComponentActivity() {
             webViewClient = object : WebViewClient() {
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                     val target = request?.url?.toString() ?: return true
-                    return handleMainWebViewNavigation(target)
+                    val handled = handleMainWebViewNavigation(target)
+                    if (!handled && request.isForMainFrame) {
+                        restrictMediaPlaybackBeforeNavigation(target)
+                    }
+                    return handled
                 }
 
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
@@ -1128,6 +1133,7 @@ class MainActivity : ComponentActivity() {
         if (flow != null) {
             // Move popup OAuth flows to the main frame so they are visible and interactive.
             rememberActiveMainFrameOAuth(flow)
+            restrictMediaPlaybackBeforeNavigation(target)
             webView.loadUrl(target)
             destroyPopup(popup)
             return true
@@ -1157,6 +1163,7 @@ class MainActivity : ComponentActivity() {
         if (startedFlow != null) {
             // Move popup OAuth flows to the main frame so they are visible and interactive.
             rememberActiveMainFrameOAuth(startedFlow)
+            restrictMediaPlaybackBeforeNavigation(url)
             webView.loadUrl(url)
             destroyPopup(popup)
             return
@@ -1243,6 +1250,10 @@ class MainActivity : ComponentActivity() {
         webView.settings.mediaPlaybackRequiresUserGesture =
             !currentWebTrustPolicy().allowsGestureFreeMediaPlayback(url)
         viewModel.onPageStarted(url)
+    }
+
+    private fun restrictMediaPlaybackBeforeNavigation(target: String) {
+        HermesMediaPlaybackPolicy.beforeAllowedMainFrameNavigation(webView, target, currentWebTrustPolicy())
     }
 
     private fun completeOAuthReturnIfHermesPage(view: WebView?, url: String?) {
@@ -1614,6 +1625,7 @@ class MainActivity : ComponentActivity() {
 
     private fun applyHermesWebViewCompatibilityFixes(view: WebView?, url: String?) {
         if (view == null) return
+        HermesMediaPlaybackPolicy.onDocumentReady(view, currentWebTrustPolicy())
         val effectiveUrl = url ?: viewModel.uiState.value.currentUrl
         if (matchesConfiguredWebUiRoute(effectiveUrl)) {
             // Android WebView can report supported dynamic viewport units while computing them as 0px.
@@ -1676,7 +1688,7 @@ class MainActivity : ComponentActivity() {
         )
     }
 
-    /** Delivers WebUI's hermes-app-foreground voice event; scoped to the configured WebUI route. */
+    /** Dispatches the proposed host event; it does not itself stop existing capture or playback. */
     private fun signalAppForegroundToWebUi(active: Boolean) {
         if (!::webView.isInitialized || !matchesConfiguredWebUiRoute(webView.url)) return
         val trustedOrigin = UrlOrigins.pageOrigin(viewModel.uiState.value.settings.serverUrl) ?: return
@@ -1822,7 +1834,10 @@ class MainActivity : ComponentActivity() {
             return
         }
         when (urlPolicy.navigationDecision(url)) {
-            NavigationDecision.ALLOW_IN_WEBVIEW -> webView.loadUrl(url)
+            NavigationDecision.ALLOW_IN_WEBVIEW -> {
+                restrictMediaPlaybackBeforeNavigation(url)
+                webView.loadUrl(url)
+            }
             NavigationDecision.OPEN_IN_EXTERNAL_BROWSER -> openInExternalBrowser(url)
             NavigationDecision.BLOCK -> Unit
         }
@@ -1830,6 +1845,7 @@ class MainActivity : ComponentActivity() {
 
     private fun loadOAuthCallbackInMainWebView(flow: OAuthPopupFlow, url: String) {
         oauthReturnNavigation.begin(flow)
+        restrictMediaPlaybackBeforeNavigation(url)
         webView.loadUrl(url)
     }
 
@@ -2103,6 +2119,7 @@ class MainActivity : ComponentActivity() {
         if (!shouldRequireVpnForServerUrl(url) || isVpnTransportActive()) {
             pendingVpnGuardUrl = null
             stopVpnReconnectWaitLoop()
+            restrictMediaPlaybackBeforeNavigation(url)
             webView.loadUrl(url)
             return
         }

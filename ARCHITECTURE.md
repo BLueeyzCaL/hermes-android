@@ -32,6 +32,29 @@ Recent cleanup keeps `MainActivity` as the Android boundary while moving cluster
 - `HermesWebViewConfigurator`: centralizes shared main/popup WebView hardening and settings setup.
 - `HermesWebViewDownloadListener`: hands allowlisted WebView downloads to Android DownloadManager with session cookies and the WebView user agent. AndroidX WebKit's RFC-compatible filename parser honors `filename*` over `filename` and preserves server-provided extensions even with generic MIME types. Explicit image downloads also retain filenames from inline preview headers; filenames cannot introduce nested destination paths. Emulator regression tests exercise the production listener and downloaded bytes for both chat and Files endpoints.
 
+Selected-server persistence reconciles a missing or dangling active profile ID
+against the normalized configured URL. A valid active profile takes precedence
+over stale `server_url` state. Adding a row for the configured URL makes it
+Current when nothing else is active. Current-profile edits update settings:
+cosmetic URL changes and renames do not reload, same-origin mount changes load
+the edited URL without clearing session data, and origin/port changes perform
+the full session-clearing switch. Manual URL saves also refresh the Settings
+profile markers.
+
+Voice capture, wake detection, STT, TTS, and re-arm behavior remain WebUI-owned.
+`VoiceCaptureLifecycleGate` denies new requests while not resumed; pending
+trusted RECORD_AUDIO results can be granted while started before resume.
+Android dispatches the proposed `hermes-app-foreground` host signal, suppressing
+pause notification while its permission prompt is pending. Current WebUI does
+not consume it, so existing capture/playback shutdown, cancellation of listening
+restarts, and explicit re-arm remain upstream work tracked by
+[PR #120](https://github.com/hermes-webui/hermes-android/pull/120).
+Gesture-free playback applies only to the configured WebUI route. Permitted
+non-WebUI main-frame navigation tightens the setting before commit; commit and
+finish callbacks re-check the actual document URL. Externalized or blocked
+links and subframes do not change the loaded WebUI's permission. Popups retain
+the gesture requirement, and Android adds no microphone service or native TTS.
+
 Background session monitoring derives the session ID from the final
 `/session/{id}` path segments of a trusted WebUI URL, including deployments
 under a mount prefix. URL segments are split before decoding so IDs round-trip
@@ -70,7 +93,6 @@ not dropped.
 8. Dashboard-origin pages are not saved as the app startup URL. For Hermes WebUI routes, Android persists both full page loads and client-side history updates (WebView visited-history callbacks). On the configured WebUI origin, Android also installs a narrow workspace-button recovery shim: when the workspace toggle is tapped from a blank root route and the panel still remains hidden, Android redirects to the last known trusted in-app session route so WebUI can rehydrate workspace state. If a dashboard URL is ever the last observed WebView URL, the next launch falls back to the configured Hermes WebUI URL.
 9. `UrlPolicy` enforces supported web schemes (`http`/`https`) + domain allowlist for every navigation.
 10. WebView microphone permission requests are accepted only for audio capture on trusted Hermes pages. Android prefers explicit allowlisted HTTP/HTTPS origins, normalizes edge-case origin formatting, and allows null/opaque-origin requests only when the active main-frame URL is the configured Hermes WebUI route. Android runtime microphone permission is requested on demand before granting the WebView request.
-11. Voice conversation (selected-profile wake, STT, TTS, profile/session/generation checks) is owned entirely by Hermes WebUI. `webui/VoiceCaptureLifecycleGate.kt` is the Android half of WebUI's `hermes-app-foreground` host contract: WebView audio capture is granted only while the activity is resumed; `onPause`/`onStop` dispatch `active:false` so WebUI stops every track and cancels playback; `onResume` dispatches `active:true`, which only permits a new explicit arm and never re-arms. The pause signal is held only while Android's own `RECORD_AUDIO` prompt is open (no capture can exist before that grant), and leaving the app with the prompt open denies the pending WebView request. Gesture-free media playback is enabled only while the main frame is on the configured WebUI route so spoken replies can start after a voice wake; OAuth provider pages and popups keep requiring a gesture. No service is declared with a microphone foreground-service type.
 11. WebUI browser notifications are backed by Android notifications. `HermesNotificationBridgeCoordinator` injects and services the scoped `Notification`/`ServiceWorkerRegistration.showNotification` compatibility facade for the configured Hermes WebUI origin, requests `POST_NOTIFICATIONS` on Android 13+, and `HermesNotificationPresenter` publishes through the native notification channel while accepting tap routes only when they target an allowlisted Hermes WebUI URL.
 12. `MainViewModel` drives loading/error/offline/share UI state. After the first successful page render, reloads and navigations keep the existing WebView content visible so cached pages do not flicker behind a full-screen native loading veil.
 13. Share intents are parsed in `domain`, staged in ViewModel, then pushed into WebView flow.

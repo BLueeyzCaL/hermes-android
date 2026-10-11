@@ -20,7 +20,7 @@ class VoiceCaptureOwnershipContractTest {
     private val kotlinSources: Map<String, String> = File(mainDir, "java")
         .walkTopDown()
         .filter { it.isFile && it.extension == "kt" }
-        .associate { it.relativeTo(mainDir).path to it.readText() }
+        .associate { it.relativeTo(mainDir).invariantSeparatorsPath to it.readText() }
 
     @Test
     fun `no foreground service may hold the microphone`() {
@@ -73,11 +73,24 @@ class VoiceCaptureOwnershipContractTest {
 
     @Test
     fun `background services never touch WebView capture`() {
-        kotlinSources
+        val backgroundSources = kotlinSources
             .filterKeys { it.contains("/background/") }
-            .forEach { (path, source) ->
+        assertThat(backgroundSources).isNotEmpty()
+        backgroundSources.forEach { (path, source) ->
                 assertWithMessage(path).that(source).doesNotContain("PermissionRequest")
                 assertWithMessage(path).that(source).doesNotContain("RECORD_AUDIO")
             }
+    }
+
+    @Test
+    fun `playback restriction is tightened only for permitted main-frame navigation`() {
+        val activity = kotlinSources.entries.single { it.key.endsWith("MainActivity.kt") }.value
+        val navigation = activity.substringAfter("override fun shouldOverrideUrlLoading(")
+            .substringBefore("override fun onPageStarted(")
+        assertThat(navigation).contains("val handled = handleMainWebViewNavigation(target)")
+        assertThat(navigation).contains("if (!handled && request.isForMainFrame)")
+        assertThat(navigation).contains("restrictMediaPlaybackBeforeNavigation(target)")
+        assertThat(activity).contains("HermesMediaPlaybackPolicy.beforeAllowedMainFrameNavigation(webView, target, currentWebTrustPolicy())")
+        assertThat(activity).contains("HermesMediaPlaybackPolicy.onDocumentReady(view, currentWebTrustPolicy())")
     }
 }

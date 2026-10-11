@@ -13,8 +13,8 @@ import org.junit.Test
  * switch, on the "Current" reconnect tap and on cold start, never a stale production page.
  */
 class SelectedServerNavigationTest {
-    private val production = "https://calinux.tail96d6ee.ts.net"
-    private val acceptance = "https://calinux.tail96d6ee.ts.net:8789"
+    private val production = "https://hermes.example.com"
+    private val acceptance = "https://hermes.example.com:8789"
 
     private val productionProfile = ServerProfile(id = "prod", name = "Production", url = production)
     private val acceptanceProfile = ServerProfile(id = "voice", name = "Voice 8789", url = acceptance)
@@ -29,7 +29,7 @@ class SelectedServerNavigationTest {
         )
 
     private fun trustFor(serverUrl: String) = WebTrustPolicy(
-        urlPolicy = UrlPolicy(setOf("calinux.tail96d6ee.ts.net")),
+        urlPolicy = UrlPolicy(setOf("hermes.example.com")),
         configuredWebUiUrl = serverUrl,
         configuredDashboardUrl = ""
     )
@@ -143,6 +143,32 @@ class SelectedServerNavigationTest {
         assertThat(SelectedServerNavigation.activeProfileIdFor("$acceptance/", profiles)).isEqualTo("voice")
         assertThat(SelectedServerNavigation.activeProfileIdFor(production, profiles)).isEqualTo("prod")
         assertThat(SelectedServerNavigation.activeProfileIdFor("https://other.example", profiles)).isNull()
+    }
+
+    @Test
+    fun `cosmetic Current profile edits and renames preserve the session without reloading`() {
+        assertThat(SelectedServerNavigation.profileEditAction(productionProfile, " HTTPS://HERMES.EXAMPLE.COM/ "))
+            .isEqualTo(ServerProfileEditAction.NONE)
+        assertThat(SelectedServerNavigation.profileEditAction(productionProfile, production))
+            .isEqualTo(ServerProfileEditAction.NONE)
+    }
+
+    @Test
+    fun `same-origin mount changes refresh without wiping cookies`() {
+        assertThat(SelectedServerNavigation.profileEditAction(productionProfile, "$production/hermes"))
+            .isEqualTo(ServerProfileEditAction.REFRESH)
+    }
+
+    @Test
+    fun `origin changes wipe the old session while non-Current edits do not navigate`() {
+        assertThat(SelectedServerNavigation.profileEditAction(productionProfile, acceptance))
+            .isEqualTo(ServerProfileEditAction.SWITCH)
+        assertThat(SelectedServerNavigation.profileEditAction(productionProfile, "http://hermes.example.com"))
+            .isEqualTo(ServerProfileEditAction.SWITCH)
+        assertThat(SelectedServerNavigation.profileEditAction(productionProfile, "https://other.example.com"))
+            .isEqualTo(ServerProfileEditAction.SWITCH)
+        assertThat(SelectedServerNavigation.profileEditAction(null, acceptance))
+            .isEqualTo(ServerProfileEditAction.NONE)
     }
 
     // 2. COLD START ---------------------------------------------------------------------------

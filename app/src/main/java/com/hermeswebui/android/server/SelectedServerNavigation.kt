@@ -1,6 +1,7 @@
 package com.hermeswebui.android.server
 
 import com.hermeswebui.android.core.security.WebTrustPolicy
+import com.hermeswebui.android.core.security.UrlOrigins
 import com.hermeswebui.android.data.HermesApiClient.ServerReadinessStatus
 import com.hermeswebui.android.data.ServerProfile
 
@@ -9,6 +10,12 @@ enum class ServerSwitchAction {
     CONFIRM_SIGN_IN_SWITCH,
     SWITCH_NOW,
     BLOCK
+}
+
+enum class ServerProfileEditAction {
+    NONE,
+    REFRESH,
+    SWITCH
 }
 
 /**
@@ -30,8 +37,19 @@ object SelectedServerNavigation {
 
     /** The profile a manually saved server URL corresponds to, so the selection stays in sync. */
     fun activeProfileIdFor(serverUrl: String, profiles: List<ServerProfile>): String? {
-        val target = comparableUrl(serverUrl)
-        return profiles.firstOrNull { comparableUrl(it.url) == target }?.id
+        val target = ServerProfileRules.normalizeUrl(serverUrl)
+        return profiles.firstOrNull { ServerProfileRules.normalizeUrl(it.url) == target }?.id
+    }
+
+    fun profileEditAction(previous: ServerProfile?, newUrl: String): ServerProfileEditAction {
+        if (previous == null || ServerProfileRules.normalizeUrl(previous.url) == ServerProfileRules.normalizeUrl(newUrl)) {
+            return ServerProfileEditAction.NONE
+        }
+        return if (UrlOrigins.hasSameOrigin(previous.url, newUrl)) {
+            ServerProfileEditAction.REFRESH
+        } else {
+            ServerProfileEditAction.SWITCH
+        }
     }
 
     fun switchAction(
@@ -66,5 +84,4 @@ object SelectedServerNavigation {
             ?: selectedServerUrl
     }
 
-    private fun comparableUrl(url: String): String = url.trim().trimEnd('/').lowercase()
 }

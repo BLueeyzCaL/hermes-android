@@ -29,7 +29,8 @@ class HermesServerProfileCoordinator(
     private val viewModel: MainViewModel,
     private val serverUrlValidator: ServerUrlValidator,
     private val onOpenInExternalBrowser: (String) -> Unit,
-    private val onPerformServerProfileSwitch: (ServerProfile) -> Unit
+    private val onPerformServerProfileSwitch: (ServerProfile) -> Unit,
+    private val onRefreshConfiguredHermes: (String) -> Unit
 ) {
     private var serverValidationJob: Job? = null
 
@@ -155,8 +156,12 @@ class HermesServerProfileCoordinator(
     private fun updateProfileAndFollowCurrent(profileId: String, name: String, url: String) {
         val previous = settingsRepository.getActiveProfile()?.takeIf { it.id == profileId }
         viewModel.updateServerProfile(profileId, name, url)
-        if (previous == null || previous.url.trim() == url) return
-        settingsRepository.getActiveProfile()?.let(onPerformServerProfileSwitch)
+        if (previous != null) viewModel.refreshSettingsFromRepository()
+        when (SelectedServerNavigation.profileEditAction(previous, url)) {
+            ServerProfileEditAction.NONE -> Unit
+            ServerProfileEditAction.REFRESH -> onRefreshConfiguredHermes(url)
+            ServerProfileEditAction.SWITCH -> settingsRepository.getActiveProfile()?.let(onPerformServerProfileSwitch)
+        }
     }
 
     fun handleDeleteServerProfile(profileId: String) {

@@ -4,9 +4,8 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
- * Android half of the WebUI voice conversation contract: WebView capture is granted only
- * while the activity is foregrounded, foreground loss is signalled to WebUI immediately,
- * and nothing on the Android side ever re-arms listening.
+ * Android grants/denies new requests and dispatches proposed host state.
+ * These tests do not prove that WebUI stops existing tracks or playback.
  */
 class VoiceCaptureLifecycleGateTest {
     private class Request(val name: String)
@@ -123,7 +122,7 @@ class VoiceCaptureLifecycleGateTest {
 
     // 4. Screen lock / app hide path: lock delivers onPause then onStop.
     @Test
-    fun `screen lock sequence releases at pause and stays released through stop`() {
+    fun `screen lock sequence signals inactive at pause and stop`() {
         foreground()
 
         gate.onPause()
@@ -247,6 +246,9 @@ class VoiceCaptureLifecycleGateTest {
 
         gate.onPause()
         gate.onRecordAudioPromptResult(granted = true, stillTrusted = { true })
+        // Android delivers activity results before onResume; this pending-result exception
+        // does not permit new requests from a merely started activity.
+        assertThat(granted).containsExactly(request)
         gate.onResume()
 
         assertThat(signals).containsExactly(true)

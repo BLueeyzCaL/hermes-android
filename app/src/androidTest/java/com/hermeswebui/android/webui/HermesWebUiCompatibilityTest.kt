@@ -14,6 +14,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import com.google.common.truth.Truth.assertThat
 import com.google.common.truth.Truth.assertWithMessage
+import com.hermeswebui.android.core.security.UrlPolicy
+import com.hermeswebui.android.core.security.WebTrustPolicy
+import com.hermeswebui.android.webview.HermesMediaPlaybackPolicy
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import org.json.JSONArray
@@ -38,6 +41,39 @@ class HermesWebUiCompatibilityTest {
             composeTestRule.runOnIdle {
                 webView.destroy()
             }
+        }
+    }
+
+    @Test
+    fun mediaPlaybackPolicy_tightensBeforeProviderOrWrongPortNavigation() {
+        loadFixture(body = "<div>Hermes</div>")
+        val policy = WebTrustPolicy(UrlPolicy(setOf("hermes.test")), "https://hermes.test", "")
+
+        composeTestRule.runOnIdle {
+            HermesMediaPlaybackPolicy.onDocumentReady(webView, policy)
+            assertThat(webView.settings.mediaPlaybackRequiresUserGesture).isFalse()
+
+            HermesMediaPlaybackPolicy.beforeAllowedMainFrameNavigation(webView, "https://provider.test/login", policy)
+            assertThat(webView.settings.mediaPlaybackRequiresUserGesture).isTrue()
+            // No commit yet: a trusted redirect must not loosen the pre-navigation restriction.
+            HermesMediaPlaybackPolicy.beforeAllowedMainFrameNavigation(webView, "https://hermes.test/session/1", policy)
+            assertThat(webView.settings.mediaPlaybackRequiresUserGesture).isTrue()
+
+            HermesMediaPlaybackPolicy.onDocumentReady(webView, policy)
+            HermesMediaPlaybackPolicy.beforeAllowedMainFrameNavigation(webView, "https://hermes.test:8789", policy)
+            assertThat(webView.settings.mediaPlaybackRequiresUserGesture).isTrue()
+        }
+    }
+
+    @Test
+    fun mediaPlaybackPolicy_rechecksTheActualProviderDocument() {
+        loadFixture(body = "<div>Provider</div>", baseUrl = "https://provider.test/")
+        val policy = WebTrustPolicy(UrlPolicy(setOf("hermes.test")), "https://hermes.test", "")
+
+        composeTestRule.runOnIdle {
+            webView.settings.mediaPlaybackRequiresUserGesture = false
+            HermesMediaPlaybackPolicy.onDocumentReady(webView, policy)
+            assertThat(webView.settings.mediaPlaybackRequiresUserGesture).isTrue()
         }
     }
 

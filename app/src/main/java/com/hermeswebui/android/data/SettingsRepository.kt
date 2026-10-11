@@ -6,6 +6,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.hermeswebui.android.core.security.UrlOrigins
 import com.hermeswebui.android.server.SelectedServerNavigation
+import com.hermeswebui.android.server.ServerProfileRules
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -167,6 +168,10 @@ class SettingsRepository(context: Context) : SettingsStore {
 
     override fun getSettings(defaultUrl: String, defaultDashboardUrl: String): AppSettings {
         val storedServerUrl = sharedPreferences.getString(KEY_SERVER_URL, defaultUrl)?.trim().orEmpty()
+        val profiles = getProfiles()
+        if (profiles.none { it.isActive }) {
+            SelectedServerNavigation.activeProfileIdFor(storedServerUrl, profiles)?.let(::setActiveProfile)
+        }
         // Settings shows the active profile as Current; repair a server_url left on another host.
         val serverUrl = SelectedServerNavigation.selectedServerUrl(storedServerUrl, getProfiles())
         if (serverUrl != storedServerUrl) {
@@ -414,9 +419,13 @@ class SettingsRepository(context: Context) : SettingsStore {
             }
         }
 
-        val profile = ServerProfile(name = name, url = url, isActive = false)
+        val currentUrl = sharedPreferences.getString(KEY_SERVER_URL, null).orEmpty()
+        val isCurrent = profiles.none { it.isActive } &&
+            normalizeProfileUrl(currentUrl) == normalizeProfileUrl(url)
+        val profile = ServerProfile(name = name, url = url, isActive = isCurrent)
         profiles.add(profile)
         saveProfiles(profiles)
+        if (isCurrent) setActiveProfile(profile.id)
         return profile
     }
 
@@ -450,8 +459,8 @@ class SettingsRepository(context: Context) : SettingsStore {
         // KEY_ACTIVE_PROFILE_ID is the single source of truth for which profile is active.
         // setActiveProfile() only updates that key (not the per-row isActive boolean in the JSON),
         // so deriving isActive from the persisted boolean let a stale profile look active after a
-        // switch. parseProfiles() computes isActive from the key. (Both creation paths already set
-        // the key alongside the profile, so nothing that is active can be missing from it.)
+        // switch. parseProfiles() computes isActive from the key; getSettings repairs a missing
+        // or dangling selection when the configured URL matches an existing row.
         return parseProfiles(
             json = sharedPreferences.getString(KEY_SERVER_PROFILES, "[]"),
             activeId = sharedPreferences.getString(KEY_ACTIVE_PROFILE_ID, null)
@@ -483,7 +492,7 @@ class SettingsRepository(context: Context) : SettingsStore {
     }
 
     private fun normalizeProfileUrl(url: String): String {
-        return url.trim().trimEnd('/').lowercase()
+        return ServerProfileRules.normalizeUrl(url)
     }
 
     companion object {

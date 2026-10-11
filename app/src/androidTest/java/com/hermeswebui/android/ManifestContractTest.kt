@@ -7,6 +7,7 @@ import android.content.pm.ServiceInfo
 import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.filters.SdkSuppress
 import com.google.common.truth.Truth.assertThat
 import com.hermeswebui.android.background.HermesDebugLoggingService
 import com.hermeswebui.android.background.HermesReconnectService
@@ -55,6 +56,7 @@ class ManifestContractTest {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 33)
     fun internalServicesAndFileProviderAreNotExported() {
         val reconnectService = packageManager.getServiceInfo(
             ComponentName(context, HermesReconnectService::class.java),
@@ -76,9 +78,9 @@ class ManifestContractTest {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 33)
     fun noServiceCanKeepMicrophoneCaptureAliveInTheBackground() {
-        // Voice conversation is foreground-only: Android's while-in-use rules silence the
-        // microphone once the activity stops unless a microphone-typed service holds it.
+        // This pins service ownership, not whether WebUI ends an already-granted track.
         val services = packageManager.getPackageInfo(
             context.packageName,
             PackageManager.PackageInfoFlags.of(PackageManager.GET_SERVICES.toLong())
