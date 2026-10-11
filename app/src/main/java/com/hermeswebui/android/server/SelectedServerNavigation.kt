@@ -42,7 +42,10 @@ object SelectedServerNavigation {
     }
 
     fun profileEditAction(previous: ServerProfile?, newUrl: String): ServerProfileEditAction {
-        if (previous == null || ServerProfileRules.normalizeUrl(previous.url) == ServerProfileRules.normalizeUrl(newUrl)) {
+        if (previous == null) return ServerProfileEditAction.NONE
+        if (ServerProfileRules.normalizeUrl(previous.url) == ServerProfileRules.normalizeUrl(newUrl) &&
+            UrlOrigins.normalizedPath(previous.url) == UrlOrigins.normalizedPath(newUrl)
+        ) {
             return ServerProfileEditAction.NONE
         }
         return if (UrlOrigins.hasSameOrigin(previous.url, newUrl)) {

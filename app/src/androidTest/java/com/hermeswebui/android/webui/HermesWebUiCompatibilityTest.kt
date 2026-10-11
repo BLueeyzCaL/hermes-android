@@ -46,7 +46,7 @@ class HermesWebUiCompatibilityTest {
 
     @Test
     fun mediaPlaybackPolicy_tightensBeforeProviderOrWrongPortNavigation() {
-        loadFixture(body = "<div>Hermes</div>")
+        loadFixture(body = "<div>Hermes</div>", historyUrl = "https://hermes.test/")
         val policy = WebTrustPolicy(UrlPolicy(setOf("hermes.test")), "https://hermes.test", "")
 
         composeTestRule.runOnIdle {
@@ -67,7 +67,7 @@ class HermesWebUiCompatibilityTest {
 
     @Test
     fun mediaPlaybackPolicy_rechecksTheActualProviderDocument() {
-        loadFixture(body = "<div>Provider</div>", baseUrl = "https://provider.test/")
+        loadFixture(body = "<div>Provider</div>", baseUrl = "https://provider.test/", historyUrl = "https://provider.test/")
         val policy = WebTrustPolicy(UrlPolicy(setOf("hermes.test")), "https://hermes.test", "")
 
         composeTestRule.runOnIdle {
@@ -502,7 +502,7 @@ class HermesWebUiCompatibilityTest {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun loadFixture(body: String, baseUrl: String = "https://hermes.test/") {
+    private fun loadFixture(body: String, baseUrl: String = "https://hermes.test/", historyUrl: String? = null) {
         val loaded = CountDownLatch(1)
         composeTestRule.setContent {
             WebViewHost { view ->
@@ -521,7 +521,7 @@ class HermesWebUiCompatibilityTest {
                     "<!doctype html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head><body>$body</body></html>",
                     "text/html",
                     "UTF-8",
-                    null
+                    historyUrl
                 )
             }
         }

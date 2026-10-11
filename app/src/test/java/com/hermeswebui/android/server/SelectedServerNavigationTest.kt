@@ -157,6 +157,12 @@ class SelectedServerNavigationTest {
     fun `same-origin mount changes refresh without wiping cookies`() {
         assertThat(SelectedServerNavigation.profileEditAction(productionProfile, "$production/hermes"))
             .isEqualTo(ServerProfileEditAction.REFRESH)
+        assertThat(
+            SelectedServerNavigation.profileEditAction(
+                productionProfile.copy(url = "$production/Hermes"),
+                "$production/hermes"
+            )
+        ).isEqualTo(ServerProfileEditAction.REFRESH)
     }
 
     @Test
