@@ -128,6 +128,8 @@ sketches are captured inline below.
 
 | ID | Date | Area | Summary |
 |---|---|---|---|
+| REL-031 | 2026-10-09 | Release preparation | Prepared Android and README metadata for v1.1.3 (version code 10103), including the session deep-link and background-monitoring fixes from PRs #122 and #124. Publication is pending the approved GitHub/Play production orchestration run. |
+| BUG-051 | 2026-10-09 | Background continuity | Implemented Issue #123's trusted WebUI `/session/{id}` detection, including mounted routes and one-time ID decoding. API 36 emulator coverage exercises authenticated SSE notifications, real approval PendingIntents, resume/socket teardown, reconnect/session transitions, and stale-stream/approval fencing. PR #124 remains subject to review and CI; upstream WebUI/OEM behavior is not established by the loopback fixtures. |
 | REL-030 | 2026-10-04 | Release preparation | Prepared Android and README metadata for v1.1.2 (version code 10102) so the next approved orchestrated release can include the Issue #118 filename fix. |
 | BUG-050 | 2026-10-04 | Files | Fixed Issue #118 chat and Files downloads saving as `media.bin` and `raw.bin`: Android now honors WebUI's RFC-compatible filename headers, including UTF-8 names and inline image downloads, without replacing original extensions for generic MIME types. Authenticated DownloadManager regression coverage preserves cookies, user agent, bytes, and the live host allowlist. |
 | REL-029 | 2026-09-29 | Release preparation | Aligned reviewed Android and README metadata for v1.1.1 (version code 10101) so the next orchestrated release can include the Issue #112 WebView fix. |
@@ -153,7 +155,7 @@ sketches are captured inline below.
 | BRAND-001 | 2026-06-20 | Branding | Renamed APK output to `hermes-android`; replaced placeholder icon with Hermes WebUI caduceus (vector + density PNGs); icon background aligned to WebUI dark `#1a1a1a` |
 | COMPAT-001 | 2026-06-20 | Android compatibility | Guarded share-intent parcelable parsing across pre- and post-Android 13 APIs |
 | A-014 | 2026-06-20 | Release | Finalized package ID and namespace as `com.hermeswebui.android` before first public release |
-| A-005 | 2026-06-20 | Deep links | Added `hermes://session/{id}` intent filter; navigates WebView to `{serverUrl}/{id}` per WebUI route contract |
+| A-005 | 2026-06-20 | Deep links | Added `hermes://session/{id}` intent filter; navigates WebView to `{serverUrl}/session/{id}` (the WebUI session route) |
 | API-001 | 2026-06-20 | API integration | Added `HermesApiClient` probing `/api/status` (public endpoint) on WebView errors to distinguish server-down from content errors |
 | NAV-001 | 2026-06-20 | Navigation | Reworked native drawer with WebUI route sections (Chat, Skills, Artifacts, Agents, Scheduler, Messaging); replaced floating button with compact hamburger-in-card trigger |
 | NAV-002 | 2026-06-20 | UI integration | Added hamburger-hiding DOM shim + user toggle to avoid visual conflict between native drawer and WebUI menu button; gracefully degrades if WebUI markup changes |

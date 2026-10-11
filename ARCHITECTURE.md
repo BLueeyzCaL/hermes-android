@@ -32,6 +32,25 @@ Recent cleanup keeps `MainActivity` as the Android boundary while moving cluster
 - `HermesWebViewConfigurator`: centralizes shared main/popup WebView hardening and settings setup.
 - `HermesWebViewDownloadListener`: hands allowlisted WebView downloads to Android DownloadManager with session cookies and the WebView user agent. AndroidX WebKit's RFC-compatible filename parser honors `filename*` over `filename` and preserves server-provided extensions even with generic MIME types. Explicit image downloads also retain filenames from inline preview headers; filenames cannot introduce nested destination paths. Emulator regression tests exercise the production listener and downloaded bytes for both chat and Files endpoints.
 
+Background session monitoring derives the session ID from the final
+`/session/{id}` path segments of a trusted WebUI URL, including deployments
+under a mount prefix. URL segments are split before decoding so IDs round-trip
+through deep links without losing encoded slashes, plus signs, or literal
+percent escapes. Root, Settings, and incomplete session routes do not trigger
+session monitoring; the legacy dashboard `/{id}` shape is not a WebUI session
+route, and dashboard pages remain browser-owned Custom Tab surfaces.
+
+The foreground-service coordinator compares the complete requested monitor
+state so reconnect-to-session transitions, session changes, cookies, and
+lock-screen privacy updates refresh an already-running service. Stream
+generations prevent canceled blocking reads from stopping or publishing over a
+replacement monitor. Approval generations reject retained actions for another
+session/request and prevent delayed HTTP replies from replacing newer
+notification state. Emulator instrumentation exercises actual service startup,
+authenticated loopback SSE, Android notification PendingIntents, and peer-observed
+socket closure on resume; it does not substitute for upstream WebUI or OEM
+compatibility checks.
+
 The viewport polyfill writes root CSS variables, baseline rules, and retained
 repair constraints only when their values change. Its DOM observer still
 responds to WebUI updates (including changed styles on repaired panels),
@@ -62,7 +81,7 @@ not dropped.
 18. Native settings include an opt-in troubleshooting debug logging mode. Android also maintains a small app-private diagnostic breadcrumb file for startup validation, server health checks, server switching decisions, and main-frame WebView failures. Breadcrumbs store safe metadata only: timestamps, app version, sanitized origin/path, status categories, HTTP status codes, and decisions; they never store cookies, auth headers, query strings, response bodies, or full token-bearing URLs. When debug logging is enabled, `HermesDebugLoggingService` starts as a foreground service with a persistent notification and one-tap Stop action, captures logcat output into app-private files under `files/debug-logs/`, and includes recent diagnostic breadcrumbs in the exported log header.
 19. Native app update alerts share the existing `Hermes updates` notification channel. The feature has separate settings for update alerts and automatic checks: automatic checks run on each app open while enabled and can be disabled without removing the manual Settings check. Build-time fields select the provider: Google Play release builds query Play Core in-app update availability and notification taps launch the Play immediate update flow, GitHub APK builds query the latest GitHub Release, parse the `*-github.apk` asset plus release notes, and trigger direct APK download through Android `DownloadManager`. On GitHub update downloads, Hermes preflights unknown-sources install permission at download start so users can grant it while the APK downloads. Settings now exposes a stateful primary action (`Check` -> `Download` -> `Install`) and keeps install-ready state after download completion instead of auto-launching the installer while foregrounded; background completion still posts an install-ready notification that returns to Hermes for install handoff (with unknown-sources permission handoff when required). After installer handoff, Android removes the staged GitHub APK on the next app launch to keep app-private downloads clean. Debug builds expose no update provider.
 20. Enabling background foreground-service features from native settings (background activity notifications or debug logging) requests Android `POST_NOTIFICATIONS` on Android 13+ when needed so users can see the required persistent status notifications.
-21. `hermes://session/{id}` deep links are handled in `MainActivity.onNewIntent`, navigating the WebView to `{serverUrl}/{id}` — the Hermes WebUI session route contract (see `apps/desktop/src/app/routes.ts: sessionRoute()` in hermes-agent).
+21. `hermes://session/{id}` deep links are handled in `MainActivity.onNewIntent`, navigating the WebView to `{serverUrl}/session/{id}` — the Hermes WebUI session route (built by `DeepLinkRoutes.sessionUrl`).
 22. An "Application Settings" entry point is injected into the Hermes WebUI sidebar immediately after the WebUI Settings item via a document-start WebView shim, with Help used only as a fallback anchor if Settings cannot be found. This shim clones the target menu item structure, strips routing attributes, injects a custom phone-outline SVG icon, and binds the click handler to the `hermes://app/settings` deep link, which triggers `MainViewModel.openSettings()` to display the native full-page settings screen overlay (`SettingsScreen`). Android exports the same `hermes://app/settings` deep link as a recovery route so native settings can be opened from ADB or an external link if WebUI is stuck on a bad route.
 
 ## Build and release flow
